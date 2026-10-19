@@ -34,6 +34,25 @@ Notifications business rules, transaction catalog, orchestration, approvals, and
 
 Owns the business logic for this vertical.
 
+## Implemented first slice
+
+- Spring Boot 3.4.0, Java 22, port **8100**.
+- Public API under `/api/v1/notifications`; `X-EIA-Tenant` is required on every request.
+- `GET` collection, `GET /{id}`, `POST` create, and `POST /{id}/send`.
+- Owns request validation, SPEC 11.8.5 channel/type checks, send-state checks, and `sent_at >= scheduled_at`; calls the expert through a `RestClient`.
+- Expert failures are propagated as RFC 9457 `application/problem+json` with the expert's status and `EIA-NTF-*` code.
+
+## Local verification
+
+```powershell
+$env:JAVA_HOME='C:\Program Files\Eclipse Adoptium\jdk-22.0.2.9-hotspot'
+.\gradlew build
+java -jar build/libs/eia-notifications-domain-0.1.0-SNAPSHOT.jar
+```
+
+Start `eia-notifications-expert` on port 8099 first. The expert URL is configured by
+`eia.notifications.expert-url` and defaults to `http://localhost:8099`.
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
