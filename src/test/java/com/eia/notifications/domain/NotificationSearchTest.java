@@ -191,6 +191,6 @@ class NotificationSearchTest {
                                                 Instant updatedAt) {
         return new NotificationDto(id, tenantId, number, "NEW_CLAIM_NOTICE", channel, status,
                 recipient, subject, "Body", "CLAIM_NOTICE_STANDARD", 1, null, null, 0, BASE,
-                updatedAt);
+                updatedAt, null, null, null);
     }
 }

@@ -39,6 +39,8 @@ Owns the business logic for this vertical.
 - Spring Boot 3.4.0, Java 22, port **8100**.
 - Public API under `/api/v1/notifications`; `X-EIA-Tenant` is required on every request.
 - `GET` collection, `GET /{id}`, `POST` create, and `POST /{id}/send`.
+- Create accepts an optional flat source link (`sourceType`, `sourceId`, `sourceReference`) and forwards
+  it to the expert unchanged. The expert owns the source-linkage rules; its `400` problem is propagated unchanged.
 - Template administration: `GET /templates` (optional `status` and `code` filters), `POST /templates`,
   `POST /templates/{id}/approve` with `{approvedBy}`, and `POST /templates/{id}/retire`.
   Templates are created as `DRAFT`, become `ACTIVE` only through approval (NTF-14), and may be retired.

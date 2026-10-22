@@ -24,6 +24,7 @@ class NotificationServiceTest {
     private static final UUID TENANT = UUID.fromString("11111111-1111-7111-8111-111111111111");
     private static final UUID NOTIFICATION_ID = UUID.fromString("0192f3a4-0000-7000-8000-000000000001");
     private static final UUID PARTY_ID = UUID.fromString("0192f3a4-0000-7000-8000-000000000002");
+    private static final UUID SOURCE_ID = UUID.fromString("0192f3a4-0000-7000-8000-000000000003");
 
     @Mock
     private NotificationExpertClient client;
@@ -73,6 +74,22 @@ class NotificationServiceTest {
     void createDelegatesToExpert() {
         CreateNotificationCommand command = command("EMAIL", "NEW_CLAIM_NOTICE", "CLAIM_NOTICE_STANDARD", 1);
         NotificationDto expected = dto("CREATED", "CLAIM_NOTICE_STANDARD", null);
+        when(client.create(TENANT, command)).thenReturn(expected);
+
+        assertThat(service.create(TENANT, command)).isEqualTo(expected);
+        verify(client).create(TENANT, command);
+    }
+
+    @Test
+    void createForwardsSourceLinkageUnchanged() {
+        CreateNotificationCommand command = new CreateNotificationCommand(
+                "NEW_CLAIM_NOTICE", "EMAIL", PARTY_ID, "Claim requires attention",
+                "Claim CLM-2026-000000001 requires attention.", "CLAIM_NOTICE_STANDARD", 1, null,
+                "DIRECT_CLAIM", SOURCE_ID, "CLM-2026-000000001");
+        NotificationDto expected = new NotificationDto(NOTIFICATION_ID, TENANT, "NTF-2026-000000001",
+                "NEW_CLAIM_NOTICE", "EMAIL", "CREATED", PARTY_ID, "Claim requires attention",
+                "Claim CLM-2026-000000001 requires attention.", "CLAIM_NOTICE_STANDARD", 1, null, null,
+                0, Instant.now(), Instant.now(), "DIRECT_CLAIM", SOURCE_ID, "CLM-2026-000000001");
         when(client.create(TENANT, command)).thenReturn(expected);
 
         assertThat(service.create(TENANT, command)).isEqualTo(expected);
@@ -133,13 +150,15 @@ class NotificationServiceTest {
     private CreateNotificationCommand command(String channel, String type, String templateCode,
                                                Integer templateVersion) {
         return new CreateNotificationCommand(type, channel, PARTY_ID, "Claim requires attention",
-                "Claim CLM-2026-000000001 requires attention.", templateCode, templateVersion, null);
+                "Claim CLM-2026-000000001 requires attention.", templateCode, templateVersion, null,
+                null, null, null);
     }
 
     private NotificationDto dto(String status, String templateCode, Instant scheduledAt) {
         return new NotificationDto(NOTIFICATION_ID, TENANT, "NTF-2026-000000001", "NEW_CLAIM_NOTICE",
                 "EMAIL", status, PARTY_ID, "Claim requires attention",
                 "Claim CLM-2026-000000001 requires attention.", templateCode,
-                templateCode == null ? null : 1, scheduledAt, null, 0, Instant.now(), Instant.now());
+                templateCode == null ? null : 1, scheduledAt, null, 0, Instant.now(), Instant.now(),
+                null, null, null);
     }
 }

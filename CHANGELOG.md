@@ -9,6 +9,9 @@ The format is based on Keep a Changelog and the project uses Semantic Versioning
 ### Added
 
 - Repository baseline.
+- Notification source linkage: create accepts optional `sourceType`, `sourceId`, and `sourceReference`;
+  the public `NotificationDto` exposes them; the domain forwards the link unchanged and preserves the
+  expert's `400` problem for an invalid link.
 - Notification template management proxy: tenant-scoped list with optional `status`/`code` filters,
   create (`DRAFT`), approve with `{approvedBy}`, and retire, preserving expert `400`/`404`/`409` problems.
 - MockRestServiceServer wire tests for the template proxy and MockMvc API tests for the public routes.

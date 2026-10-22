@@ -60,11 +60,16 @@ public class NotificationExpertClient {
         });
     }
 
+    /**
+     * Forwards a create command, including the optional flat source link. The
+     * expert owns the source-linkage rules; its 400 problem is translated with
+     * the expert's status and code, so an invalid link stays a 400 for callers.
+     */
     public NotificationDto create(UUID tenantId, CreateNotificationCommand command) {
         ExpertCreateRequest request = new ExpertCreateRequest(
                 tenantId, command.notificationType(), command.channel(), command.recipientPartyId(),
                 command.subject(), command.body(), command.templateCode(), command.templateVersion(),
-                command.scheduledAt());
+                command.scheduledAt(), command.sourceType(), command.sourceId(), command.sourceReference());
         return call(() -> {
             NotificationDto body = client.post()
                     .uri("/internal/v1/notifications")
@@ -215,7 +220,10 @@ public class NotificationExpertClient {
             String body,
             String templateCode,
             Integer templateVersion,
-            Instant scheduledAt
+            Instant scheduledAt,
+            String sourceType,
+            UUID sourceId,
+            String sourceReference
     ) {
     }
 

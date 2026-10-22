@@ -23,6 +23,9 @@ public record NotificationDto(
         Instant sentAt,
         int version,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        String sourceType,
+        UUID sourceId,
+        String sourceReference
 ) {
 }
