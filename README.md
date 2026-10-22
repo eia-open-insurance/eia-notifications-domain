@@ -49,7 +49,8 @@ Owns the business logic for this vertical.
 - `GET` collection accepts an optional `sourceType` + `sourceId` query filter and forwards it to the
   expert. The expert owns the pair rule and source-type set; an invalid filter's `400` problem is propagated unchanged.
 - Template administration: `GET /templates` (optional `status` and `code` filters), `POST /templates`,
-  `POST /templates/{id}/approve` with `{approvedBy}`, and `POST /templates/{id}/retire`.
+  `POST /templates/{id}/approve` with `{approvedBy}` (a string directory identifier such as
+  `a-adjuster`), and `POST /templates/{id}/retire`.
   Templates are created as `DRAFT`, become `ACTIVE` only through approval (NTF-14), and may be retired.
   Expert `400`/`404`/`409` problems are propagated unchanged.
 - Owns request validation, SPEC 11.8.5 channel/type checks, send-state checks, and `sent_at >= scheduled_at`; calls the expert through a `RestClient`.

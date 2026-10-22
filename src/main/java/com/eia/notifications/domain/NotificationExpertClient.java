@@ -180,7 +180,7 @@ public class NotificationExpertClient {
         });
     }
 
-    public NotificationTemplateDto approveTemplate(UUID tenantId, UUID id, UUID approvedBy) {
+    public NotificationTemplateDto approveTemplate(UUID tenantId, UUID id, String approvedBy) {
         return call(() -> {
             NotificationTemplateDto body = client.post()
                     .uri(uri -> uri.path(TEMPLATES_PATH + "/{id}/approve")
@@ -284,6 +284,6 @@ public class NotificationExpertClient {
     ) {
     }
 
-    private record ApproveTemplateRequest(UUID tenantId, UUID approvedBy) {
+    private record ApproveTemplateRequest(UUID tenantId, String approvedBy) {
     }
 }

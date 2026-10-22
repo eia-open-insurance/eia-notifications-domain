@@ -35,7 +35,7 @@ class NotificationTemplateExpertClientTest {
 
     private static final UUID TENANT = UUID.fromString("11111111-1111-7111-8111-111111111111");
     private static final UUID TEMPLATE_ID = UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
-    private static final UUID APPROVER = UUID.fromString("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+    private static final String APPROVER = "a-adjuster";
     private static final String EXPERT = "http://expert.test";
     private static final String TEMPLATES_URL = EXPERT + "/api/v1/notifications/templates";
     private static final Instant CREATED_AT = Instant.parse("2026-10-19T12:00:00Z");
@@ -66,7 +66,7 @@ class NotificationTemplateExpertClientTest {
               "locale": "en-US",
               "bodyTemplate": "Claim {{claimNumber}} requires attention.",
               "status": "ACTIVE",
-              "approvedBy": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+              "approvedBy": "a-adjuster",
               "approvedAt": "2026-10-21T18:00:00Z",
               "createdAt": "2026-10-19T12:00:00Z",
               "updatedAt": "2026-10-21T18:00:00Z"
@@ -180,7 +180,7 @@ class NotificationTemplateExpertClientTest {
                 .andExpect(content().json("""
                         {
                           "tenantId": "11111111-1111-7111-8111-111111111111",
-                          "approvedBy": "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+                          "approvedBy": "a-adjuster"
                         }
                         """, JsonCompareMode.STRICT))
                 .andRespond(withSuccess(ACTIVE_TEMPLATE_JSON, MediaType.APPLICATION_JSON));

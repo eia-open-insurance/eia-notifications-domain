@@ -22,7 +22,7 @@ class NotificationTemplateServiceTest {
 
     private static final UUID TENANT = UUID.fromString("11111111-1111-7111-8111-111111111111");
     private static final UUID TEMPLATE_ID = UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
-    private static final UUID APPROVER = UUID.fromString("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+    private static final String APPROVER = "a-adjuster";
 
     @Mock
     private NotificationExpertClient client;

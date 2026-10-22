@@ -38,7 +38,7 @@ public class NotificationTemplateService {
         return client.createTemplate(tenantId, command);
     }
 
-    public NotificationTemplateDto approve(UUID tenantId, UUID templateId, UUID approvedBy) {
+    public NotificationTemplateDto approve(UUID tenantId, UUID templateId, String approvedBy) {
         if (approvedBy == null) {
             throw new ApiException(ErrorCode.INVALID_ARGUMENT, "approvedBy is required.");
         }

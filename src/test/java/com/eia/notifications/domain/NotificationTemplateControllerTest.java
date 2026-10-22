@@ -35,7 +35,7 @@ class NotificationTemplateControllerTest {
 
     private static final UUID TENANT = UUID.fromString("11111111-1111-7111-8111-111111111111");
     private static final UUID TEMPLATE_ID = UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
-    private static final UUID APPROVER = UUID.fromString("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+    private static final String APPROVER = "a-adjuster";
     private static final Instant CREATED_AT = Instant.parse("2026-10-19T12:00:00Z");
     private static final Instant UPDATED_AT = Instant.parse("2026-10-21T18:00:00Z");
     private static final String BODY_TEMPLATE = "Claim {{claimNumber}} requires attention.";
@@ -186,11 +186,11 @@ class NotificationTemplateControllerTest {
                         .header("X-EIA-Tenant", TENANT.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"approvedBy": "cccccccc-cccc-4ccc-8ccc-cccccccccccc"}
+                                {"approvedBy": "a-adjuster"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("ACTIVE"))
-                .andExpect(jsonPath("$.approvedBy").value(APPROVER.toString()))
+                .andExpect(jsonPath("$.approvedBy").value(APPROVER))
                 .andExpect(jsonPath("$.approvedAt").value("2026-10-21T18:00:00Z"));
 
         verify(service).approve(TENANT, TEMPLATE_ID, APPROVER);
@@ -276,7 +276,7 @@ class NotificationTemplateControllerTest {
                         .header("X-EIA-Tenant", TENANT.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"approvedBy": "cccccccc-cccc-4ccc-8ccc-cccccccccccc"}
+                                {"approvedBy": "a-adjuster"}
                                 """))
                 .andExpect(status().isNotFound())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
@@ -298,7 +298,7 @@ class NotificationTemplateControllerTest {
                 .andExpect(jsonPath("$.category").value("CONFLICT"));
     }
 
-    private static NotificationTemplateDto template(String status, UUID approvedBy, Instant approvedAt) {
+    private static NotificationTemplateDto template(String status, String approvedBy, Instant approvedAt) {
         return new NotificationTemplateDto(TEMPLATE_ID, "CLAIM_NOTICE_STANDARD", 1, "EMAIL",
                 "en-US", BODY_TEMPLATE, status, approvedBy, approvedAt, CREATED_AT,
                 approvedAt == null ? CREATED_AT : approvedAt);

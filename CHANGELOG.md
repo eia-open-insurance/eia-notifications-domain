@@ -20,3 +20,8 @@ The format is based on Keep a Changelog and the project uses Semantic Versioning
 - Notification template management proxy: tenant-scoped list with optional `status`/`code` filters,
   create (`DRAFT`), approve with `{approvedBy}`, and retire, preserving expert `400`/`404`/`409` problems.
 - MockRestServiceServer wire tests for the template proxy and MockMvc API tests for the public routes.
+
+### Changed
+
+- Notification template approval accepts `approvedBy` as a string directory identifier (for example
+  `a-adjuster`) instead of a UUID, and forwards it unchanged to the expert.
