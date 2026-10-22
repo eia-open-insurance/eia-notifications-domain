@@ -14,6 +14,7 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,9 +26,10 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 /**
- * Wire-level tests for the notification create proxy: the optional flat source
- * link is forwarded unchanged, read back on the public DTO, and an expert 400
- * for an invalid link reaches the caller as a 400.
+ * Wire-level tests for the notification source proxy: the optional flat source
+ * link on create and the optional source filter on the list are forwarded
+ * unchanged, read back on the public DTO, and an expert 400 for an invalid link
+ * or filter reaches the caller as a 400.
  */
 class NotificationExpertClientTest {
 
@@ -36,7 +38,8 @@ class NotificationExpertClientTest {
     private static final UUID PARTY_ID = UUID.fromString("0192f3a4-0000-7000-8000-000000000002");
     private static final UUID SOURCE_ID = UUID.fromString("0192f3a4-0000-7000-8000-000000000003");
     private static final String EXPERT = "http://expert.test";
-    private static final String CREATE_URL = EXPERT + "/internal/v1/notifications";
+    private static final String LIST_URL = EXPERT + "/internal/v1/notifications";
+    private static final String CREATE_URL = LIST_URL;
     private static final Instant CREATED_AT = Instant.parse("2026-10-19T12:00:00Z");
 
     private MockRestServiceServer server;
@@ -54,6 +57,78 @@ class NotificationExpertClientTest {
                 });
         server = MockRestServiceServer.bindTo(builder).build();
         client = new NotificationExpertClient(builder, EXPERT, new ObjectMapper());
+    }
+
+    @Test
+    void forwardsSourceFilterToTheExpertAndReadsNotifications() {
+        server.expect(requestTo(LIST_URL + "?tenantId=" + TENANT
+                        + "&sourceType=DIRECT_CLAIM&sourceId=" + SOURCE_ID))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(
+                        "[" + notificationJson("DIRECT_CLAIM", SOURCE_ID, "CLM-2026-000000001") + "]",
+                        MediaType.APPLICATION_JSON));
+
+        List<NotificationDto> notifications = client.findAll(TENANT, "DIRECT_CLAIM", SOURCE_ID.toString());
+
+        assertThat(notifications).singleElement().satisfies(notification -> {
+            assertThat(notification.id()).isEqualTo(NOTIFICATION_ID);
+            assertThat(notification.notificationNumber()).isEqualTo("NTF-2026-000000001");
+            assertThat(notification.sourceType()).isEqualTo("DIRECT_CLAIM");
+            assertThat(notification.sourceId()).isEqualTo(SOURCE_ID);
+            assertThat(notification.sourceReference()).isEqualTo("CLM-2026-000000001");
+        });
+        server.verify();
+    }
+
+    @Test
+    void forwardsAPartialSourceFilterSoTheExpertOwnsThePairRule() {
+        server.expect(requestTo(LIST_URL + "?tenantId=" + TENANT + "&sourceType=DIRECT_CLAIM"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST)
+                        .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("""
+                                {"type": "https://errors.eia.example/eia-ntf-9412",
+                                 "title": "Invalid source filter", "status": 400,
+                                 "detail": "sourceId is required when sourceType is supplied.",
+                                 "code": "EIA-NTF-9412", "category": "VALIDATION"}
+                                """));
+
+        assertThatThrownBy(() -> client.findAll(TENANT, "DIRECT_CLAIM", null))
+                .isInstanceOfSatisfying(ExpertApiException.class, ex -> {
+                    assertThat(ex.status()).isEqualTo(400);
+                    assertThat(ex.code()).isEqualTo("EIA-NTF-9412");
+                    assertThat(ex.title()).isEqualTo("Invalid source filter");
+                    assertThat(ex.getMessage())
+                            .isEqualTo("sourceId is required when sourceType is supplied.");
+                    assertThat(ex.category()).isEqualTo("VALIDATION");
+                    assertThat(ex.retryable()).isFalse();
+                });
+        server.verify();
+    }
+
+    @Test
+    void preservesAnExpertUnknownSourceTypeProblemOnList() {
+        server.expect(requestTo(LIST_URL + "?tenantId=" + TENANT
+                        + "&sourceType=BRIBE&sourceId=" + SOURCE_ID))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withStatus(HttpStatus.BAD_REQUEST)
+                        .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("""
+                                {"type": "https://errors.eia.example/eia-ntf-9409",
+                                 "title": "Invalid source type", "status": 400,
+                                 "detail": "Source type 'BRIBE' is not one of: DIRECT_CLAIM, ASSUMED_CLAIM, POLICY, CONTRACT, PAYMENT, OTHER.",
+                                 "code": "EIA-NTF-9409", "category": "VALIDATION"}
+                                """));
+
+        assertThatThrownBy(() -> client.findAll(TENANT, "BRIBE", SOURCE_ID.toString()))
+                .isInstanceOfSatisfying(ExpertApiException.class, ex -> {
+                    assertThat(ex.status()).isEqualTo(400);
+                    assertThat(ex.code()).isEqualTo("EIA-NTF-9409");
+                    assertThat(ex.title()).isEqualTo("Invalid source type");
+                    assertThat(ex.category()).isEqualTo("VALIDATION");
+                    assertThat(ex.retryable()).isFalse();
+                });
+        server.verify();
     }
 
     @Test

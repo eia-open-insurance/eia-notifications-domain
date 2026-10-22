@@ -41,6 +41,8 @@ Owns the business logic for this vertical.
 - `GET` collection, `GET /{id}`, `POST` create, and `POST /{id}/send`.
 - Create accepts an optional flat source link (`sourceType`, `sourceId`, `sourceReference`) and forwards
   it to the expert unchanged. The expert owns the source-linkage rules; its `400` problem is propagated unchanged.
+- `GET` collection accepts an optional `sourceType` + `sourceId` query filter and forwards it to the
+  expert. The expert owns the pair rule and source-type set; an invalid filter's `400` problem is propagated unchanged.
 - Template administration: `GET /templates` (optional `status` and `code` filters), `POST /templates`,
   `POST /templates/{id}/approve` with `{approvedBy}`, and `POST /templates/{id}/retire`.
   Templates are created as `DRAFT`, become `ACTIVE` only through approval (NTF-14), and may be retired.

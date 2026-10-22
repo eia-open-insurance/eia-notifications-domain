@@ -16,6 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -30,6 +31,7 @@ class NotificationControllerTest {
     private static final UUID TENANT = UUID.fromString("11111111-1111-7111-8111-111111111111");
     private static final UUID NOTIFICATION_ID = UUID.fromString("0192f3a4-0000-7000-8000-000000000001");
     private static final UUID PARTY_ID = UUID.fromString("0192f3a4-0000-7000-8000-000000000002");
+    private static final UUID SOURCE_ID = UUID.fromString("0192f3a4-0000-7000-8000-000000000003");
 
     @Autowired
     private MockMvc mvc;
@@ -39,13 +41,85 @@ class NotificationControllerTest {
 
     @Test
     void listReturnsNotifications() throws Exception {
-        when(service.list(TENANT)).thenReturn(List.of(dto("CREATED", "CLAIM_NOTICE_STANDARD")));
+        when(service.list(TENANT, null, null)).thenReturn(List.of(dto("CREATED", "CLAIM_NOTICE_STANDARD")));
 
         mvc.perform(get("/api/v1/notifications").header("X-EIA-Tenant", TENANT.toString()))
                 .andExpect(status().isOk())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
                 .andExpect(jsonPath("$[0].notificationNumber").value("NTF-2026-000000001"))
                 .andExpect(jsonPath("$[0].status").value("CREATED"));
+
+        verify(service).list(TENANT, null, null);
+        verify(service, never()).list(TENANT);
+    }
+
+    @Test
+    void listForwardsSourceFilterToTheService() throws Exception {
+        when(service.list(TENANT, "DIRECT_CLAIM", SOURCE_ID.toString()))
+                .thenReturn(List.of(dtoWithSource("DIRECT_CLAIM", SOURCE_ID, "CLM-2026-000000001")));
+
+        mvc.perform(get("/api/v1/notifications")
+                        .header("X-EIA-Tenant", TENANT.toString())
+                        .param("sourceType", "DIRECT_CLAIM")
+                        .param("sourceId", SOURCE_ID.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].sourceType").value("DIRECT_CLAIM"))
+                .andExpect(jsonPath("$[0].sourceId").value(SOURCE_ID.toString()))
+                .andExpect(jsonPath("$[0].sourceReference").value("CLM-2026-000000001"));
+
+        verify(service).list(TENANT, "DIRECT_CLAIM", SOURCE_ID.toString());
+        verify(service, never()).list(TENANT, "DIRECT_CLAIM", null);
+    }
+
+    @Test
+    void listForwardsAnIncompleteSourceFilterToTheService() throws Exception {
+        when(service.list(TENANT, "DIRECT_CLAIM", null)).thenReturn(List.of());
+
+        mvc.perform(get("/api/v1/notifications")
+                        .header("X-EIA-Tenant", TENANT.toString())
+                        .param("sourceType", "DIRECT_CLAIM"))
+                .andExpect(status().isOk());
+
+        verify(service).list(TENANT, "DIRECT_CLAIM", null);
+    }
+
+    @Test
+    void listPreservesExpertSourceFilterBadRequest() throws Exception {
+        when(service.list(TENANT, "DIRECT_CLAIM", null)).thenThrow(new ExpertApiException(
+                400, "EIA-NTF-9412", "Invalid source filter",
+                "sourceId is required when sourceType is supplied.", "VALIDATION", false));
+
+        mvc.perform(get("/api/v1/notifications")
+                        .header("X-EIA-Tenant", TENANT.toString())
+                        .param("sourceType", "DIRECT_CLAIM"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("EIA-NTF-9412"))
+                .andExpect(jsonPath("$.title").value("Invalid source filter"))
+                .andExpect(jsonPath("$.detail").value("sourceId is required when sourceType is supplied."))
+                .andExpect(jsonPath("$.category").value("VALIDATION"))
+                .andExpect(jsonPath("$.retryable").value(false));
+
+        verify(service).list(TENANT, "DIRECT_CLAIM", null);
+    }
+
+    @Test
+    void listPreservesExpertUnknownSourceTypeBadRequest() throws Exception {
+        when(service.list(TENANT, "BRIBE", SOURCE_ID.toString())).thenThrow(new ExpertApiException(
+                400, "EIA-NTF-9409", "Invalid source type",
+                "Source type 'BRIBE' is not one of: DIRECT_CLAIM, ASSUMED_CLAIM, POLICY, CONTRACT, PAYMENT, OTHER.",
+                "VALIDATION", false));
+
+        mvc.perform(get("/api/v1/notifications")
+                        .header("X-EIA-Tenant", TENANT.toString())
+                        .param("sourceType", "BRIBE")
+                        .param("sourceId", SOURCE_ID.toString()))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("EIA-NTF-9409"))
+                .andExpect(jsonPath("$.category").value("VALIDATION"));
+
+        verify(service).list(TENANT, "BRIBE", SOURCE_ID.toString());
     }
 
     @Test

@@ -30,8 +30,10 @@ public class NotificationController {
     }
 
     @GetMapping
-    public List<NotificationDto> list(@RequestHeader("X-EIA-Tenant") UUID tenantId) {
-        return service.list(tenantId);
+    public List<NotificationDto> list(@RequestHeader("X-EIA-Tenant") UUID tenantId,
+                                      @RequestParam(name = "sourceType", required = false) String sourceType,
+                                      @RequestParam(name = "sourceId", required = false) String sourceId) {
+        return service.list(tenantId, sourceType, sourceId);
     }
 
     @GetMapping("/search")

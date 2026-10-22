@@ -48,6 +48,33 @@ public class NotificationExpertClient {
         });
     }
 
+    /**
+     * Tenant-scoped list, optionally narrowed to the notifications linked to
+     * one source record. The expert evaluates the filter so the domain never
+     * holds a second copy of the source-linkage rules; an invalid filter keeps
+     * the expert's 400 problem for the caller.
+     */
+    public List<NotificationDto> findAll(UUID tenantId, String sourceType, String sourceId) {
+        return call(() -> {
+            List<NotificationDto> body = client.get()
+                    .uri(uri -> {
+                        var builder = uri.path("/internal/v1/notifications")
+                                .queryParam("tenantId", tenantId);
+                        if (sourceType != null) {
+                            builder.queryParam("sourceType", sourceType);
+                        }
+                        if (sourceId != null) {
+                            builder.queryParam("sourceId", sourceId);
+                        }
+                        return builder.build();
+                    })
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<NotificationDto>>() {
+                    });
+            return body == null ? List.of() : body;
+        });
+    }
+
     public NotificationDto findById(UUID tenantId, UUID id) {
         return call(() -> {
             NotificationDto body = client.get()

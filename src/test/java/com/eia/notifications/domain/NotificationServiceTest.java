@@ -147,6 +147,43 @@ class NotificationServiceTest {
         assertThat(service.list(TENANT)).isEmpty();
     }
 
+    @Test
+    void listTrimsAndForwardsSourceFilterToExpert() {
+        when(client.findAll(TENANT, "DIRECT_CLAIM", SOURCE_ID.toString())).thenReturn(List.of());
+
+        assertThat(service.list(TENANT, "  DIRECT_CLAIM ", " " + SOURCE_ID + "  ")).isEmpty();
+
+        verify(client).findAll(TENANT, "DIRECT_CLAIM", SOURCE_ID.toString());
+        verify(client, never()).findAll(TENANT);
+    }
+
+    @Test
+    void listUsesTheUnfilteredExpertCallForBlankSourceFilter() {
+        when(client.findAll(TENANT)).thenReturn(List.of());
+
+        assertThat(service.list(TENANT, "  ", "")).isEmpty();
+
+        verify(client).findAll(TENANT);
+        verify(client, never()).findAll(any(), any(), any());
+    }
+
+    @Test
+    void listForwardsAnIncompleteSourceFilterSoTheExpertOwnsThePairRule() {
+        when(client.findAll(TENANT, "DIRECT_CLAIM", null)).thenThrow(new ExpertApiException(
+                400, "EIA-NTF-9412", "Invalid source filter",
+                "sourceId is required when sourceType is supplied.", "VALIDATION", false));
+
+        assertThatThrownBy(() -> service.list(TENANT, "DIRECT_CLAIM", null))
+                .isInstanceOfSatisfying(ExpertApiException.class, ex -> {
+                    assertThat(ex.status()).isEqualTo(400);
+                    assertThat(ex.code()).isEqualTo("EIA-NTF-9412");
+                    assertThat(ex.getMessage())
+                            .isEqualTo("sourceId is required when sourceType is supplied.");
+                });
+
+        verify(client).findAll(TENANT, "DIRECT_CLAIM", null);
+    }
+
     private CreateNotificationCommand command(String channel, String type, String templateCode,
                                                Integer templateVersion) {
         return new CreateNotificationCommand(type, channel, PARTY_ID, "Claim requires attention",
