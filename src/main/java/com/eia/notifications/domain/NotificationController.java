@@ -48,6 +48,12 @@ public class NotificationController {
         return service.get(tenantId, id);
     }
 
+    @GetMapping("/{id}/attempts")
+    public List<NotificationDeliveryAttemptDto> attempts(@RequestHeader("X-EIA-Tenant") UUID tenantId,
+                                                         @PathVariable UUID id) {
+        return service.attempts(tenantId, id);
+    }
+
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public NotificationDto create(@RequestHeader("X-EIA-Tenant") UUID tenantId,

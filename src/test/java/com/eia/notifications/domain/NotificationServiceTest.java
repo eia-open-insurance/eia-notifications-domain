@@ -89,7 +89,7 @@ class NotificationServiceTest {
         NotificationDto expected = new NotificationDto(NOTIFICATION_ID, TENANT, "NTF-2026-000000001",
                 "NEW_CLAIM_NOTICE", "EMAIL", "CREATED", PARTY_ID, "Claim requires attention",
                 "Claim CLM-2026-000000001 requires attention.", "CLAIM_NOTICE_STANDARD", 1, null, null,
-                0, Instant.now(), Instant.now(), "DIRECT_CLAIM", SOURCE_ID, "CLM-2026-000000001");
+                null, null, 0, Instant.now(), Instant.now(), "DIRECT_CLAIM", SOURCE_ID, "CLM-2026-000000001");
         when(client.create(TENANT, command)).thenReturn(expected);
 
         assertThat(service.create(TENANT, command)).isEqualTo(expected);
@@ -184,6 +184,35 @@ class NotificationServiceTest {
         verify(client).findAll(TENANT, "DIRECT_CLAIM", null);
     }
 
+    @Test
+    void attemptsDelegateToTheExpertWithTheTenant() {
+        NotificationDeliveryAttemptDto attempt = new NotificationDeliveryAttemptDto(
+                UUID.fromString("0192f3a4-0000-7000-8000-0000000000a1"), TENANT, NOTIFICATION_ID, 1,
+                "EMAIL", "SIMULATOR", "SIM-" + NOTIFICATION_ID, "DELIVERED", null, null,
+                Instant.parse("2026-10-22T12:00:00Z"));
+        when(client.findAttempts(TENANT, NOTIFICATION_ID)).thenReturn(List.of(attempt));
+
+        assertThat(service.attempts(TENANT, NOTIFICATION_ID)).containsExactly(attempt);
+
+        verify(client).findAttempts(TENANT, NOTIFICATION_ID);
+    }
+
+    @Test
+    void attemptsPreserveTheExpertNotFound() {
+        when(client.findAttempts(TENANT, NOTIFICATION_ID)).thenThrow(new ExpertApiException(
+                404, "EIA-NTF-9001", "Resource not found",
+                "Notification '" + NOTIFICATION_ID + "' was not found.", "NOT_FOUND", false));
+
+        assertThatThrownBy(() -> service.attempts(TENANT, NOTIFICATION_ID))
+                .isInstanceOfSatisfying(ExpertApiException.class, ex -> {
+                    assertThat(ex.status()).isEqualTo(404);
+                    assertThat(ex.code()).isEqualTo("EIA-NTF-9001");
+                    assertThat(ex.category()).isEqualTo("NOT_FOUND");
+                });
+
+        verify(client).findAttempts(TENANT, NOTIFICATION_ID);
+    }
+
     private CreateNotificationCommand command(String channel, String type, String templateCode,
                                                Integer templateVersion) {
         return new CreateNotificationCommand(type, channel, PARTY_ID, "Claim requires attention",
@@ -195,7 +224,7 @@ class NotificationServiceTest {
         return new NotificationDto(NOTIFICATION_ID, TENANT, "NTF-2026-000000001", "NEW_CLAIM_NOTICE",
                 "EMAIL", status, PARTY_ID, "Claim requires attention",
                 "Claim CLM-2026-000000001 requires attention.", templateCode,
-                templateCode == null ? null : 1, scheduledAt, null, 0, Instant.now(), Instant.now(),
+                templateCode == null ? null : 1, scheduledAt, null, null, null, 0, Instant.now(), Instant.now(),
                 null, null, null);
     }
 }

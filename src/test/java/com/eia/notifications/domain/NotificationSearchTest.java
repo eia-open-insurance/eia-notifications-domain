@@ -190,7 +190,7 @@ class NotificationSearchTest {
                                                 String channel, String status, UUID recipient,
                                                 Instant updatedAt) {
         return new NotificationDto(id, tenantId, number, "NEW_CLAIM_NOTICE", channel, status,
-                recipient, subject, "Body", "CLAIM_NOTICE_STANDARD", 1, null, null, 0, BASE,
+                recipient, subject, "Body", "CLAIM_NOTICE_STANDARD", 1, null, null, null, null, 0, BASE,
                 updatedAt, null, null, null);
     }
 }

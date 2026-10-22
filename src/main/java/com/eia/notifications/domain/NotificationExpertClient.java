@@ -88,6 +88,26 @@ public class NotificationExpertClient {
     }
 
     /**
+     * Tenant-scoped delivery history for one notification. The expert owns the
+     * attempt rows and their ordering; the domain forwards the tenant on both
+     * the query parameter and the {@code X-EIA-Tenant} header and preserves the
+     * expert's 404 problem for an unknown or foreign-tenant notification.
+     */
+    public List<NotificationDeliveryAttemptDto> findAttempts(UUID tenantId, UUID id) {
+        return call(() -> {
+            List<NotificationDeliveryAttemptDto> body = client.get()
+                    .uri(uri -> uri.path("/internal/v1/notifications/{id}/attempts")
+                            .queryParam("tenantId", tenantId)
+                            .build(id))
+                    .header(TENANT_HEADER, tenantId.toString())
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<NotificationDeliveryAttemptDto>>() {
+                    });
+            return body == null ? List.of() : body;
+        });
+    }
+
+    /**
      * Forwards a create command, including the optional flat source link. The
      * expert owns the source-linkage rules; its 400 problem is translated with
      * the expert's status and code, so an invalid link stays a 400 for callers.

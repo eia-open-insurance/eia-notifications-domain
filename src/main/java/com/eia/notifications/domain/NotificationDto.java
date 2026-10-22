@@ -5,7 +5,9 @@ import java.util.UUID;
 
 /**
  * Public representation of a notification. Mirrors the expert response so the
- * domain does not leak persistence entities (SPEC 7.6).
+ * domain does not leak persistence entities (SPEC 7.6). {@code deliveredAt} and
+ * {@code providerReference} carry the provider-confirmed delivery evidence of
+ * the send recorded on the notification.
  */
 public record NotificationDto(
         UUID id,
@@ -21,6 +23,8 @@ public record NotificationDto(
         Integer templateVersion,
         Instant scheduledAt,
         Instant sentAt,
+        Instant deliveredAt,
+        String providerReference,
         int version,
         Instant createdAt,
         Instant updatedAt,

@@ -9,6 +9,9 @@ The format is based on Keep a Changelog and the project uses Semantic Versioning
 ### Added
 
 - Repository baseline.
+- Delivery-attempt history proxy: `GET /api/v1/notifications/{id}/attempts` forwards the tenant to
+  the expert and preserves its `404` problem; the public `NotificationDto` exposes the delivery
+  evidence `providerReference` and `deliveredAt`.
 - Notification source linkage: create accepts optional `sourceType`, `sourceId`, and `sourceReference`;
   the public `NotificationDto` exposes them; the domain forwards the link unchanged and preserves the
   expert's `400` problem for an invalid link.

@@ -20,26 +20,31 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 /**
- * Wire-level tests for the notification source proxy: the optional flat source
- * link on create and the optional source filter on the list are forwarded
- * unchanged, read back on the public DTO, and an expert 400 for an invalid link
- * or filter reaches the caller as a 400.
+ * Wire-level tests for the notification source proxy and the delivery-attempt
+ * read: the optional flat source link on create, the optional source filter on
+ * the list, and the tenant-scoped attempt history are forwarded unchanged, read
+ * back on the public DTOs, and an expert 400 or 404 reaches the caller with the
+ * same status.
  */
 class NotificationExpertClientTest {
 
     private static final UUID TENANT = UUID.fromString("11111111-1111-7111-8111-111111111111");
     private static final UUID NOTIFICATION_ID = UUID.fromString("0192f3a4-0000-7000-8000-000000000001");
+    private static final UUID ATTEMPT_ID = UUID.fromString("0192f3a4-0000-7000-8000-0000000000a1");
+    private static final UUID RETRY_ID = UUID.fromString("0192f3a4-0000-7000-8000-0000000000a2");
     private static final UUID PARTY_ID = UUID.fromString("0192f3a4-0000-7000-8000-000000000002");
     private static final UUID SOURCE_ID = UUID.fromString("0192f3a4-0000-7000-8000-000000000003");
     private static final String EXPERT = "http://expert.test";
     private static final String LIST_URL = EXPERT + "/internal/v1/notifications";
     private static final String CREATE_URL = LIST_URL;
+    private static final String ATTEMPTS_URL = LIST_URL + "/" + NOTIFICATION_ID + "/attempts";
     private static final Instant CREATED_AT = Instant.parse("2026-10-19T12:00:00Z");
 
     private MockRestServiceServer server;
@@ -221,6 +226,78 @@ class NotificationExpertClientTest {
         server.verify();
     }
 
+    @Test
+    void readsProviderReferenceAndDeliveredAtFromTheExpertNotification() {
+        server.expect(requestTo(LIST_URL + "/" + NOTIFICATION_ID + "?tenantId=" + TENANT))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess(notificationJson(null, null, null,
+                        Instant.parse("2026-10-20T09:31:00Z"), "SIM-2026-000001"),
+                        MediaType.APPLICATION_JSON));
+
+        NotificationDto notification = client.findById(TENANT, NOTIFICATION_ID);
+
+        assertThat(notification.deliveredAt()).isEqualTo(Instant.parse("2026-10-20T09:31:00Z"));
+        assertThat(notification.providerReference()).isEqualTo("SIM-2026-000001");
+        server.verify();
+    }
+
+    @Test
+    void forwardsTheTenantAndReadsTheDeliveryAttemptHistory() {
+        server.expect(requestTo(ATTEMPTS_URL + "?tenantId=" + TENANT))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("X-EIA-Tenant", TENANT.toString()))
+                .andRespond(withSuccess(attemptsJson(), MediaType.APPLICATION_JSON));
+
+        List<NotificationDeliveryAttemptDto> attempts = client.findAttempts(TENANT, NOTIFICATION_ID);
+
+        assertThat(attempts).hasSize(2);
+        assertThat(attempts.get(0)).satisfies(attempt -> {
+            assertThat(attempt.id()).isEqualTo(ATTEMPT_ID);
+            assertThat(attempt.tenantId()).isEqualTo(TENANT);
+            assertThat(attempt.notificationId()).isEqualTo(NOTIFICATION_ID);
+            assertThat(attempt.attemptNumber()).isEqualTo(1);
+            assertThat(attempt.channel()).isEqualTo("EMAIL");
+            assertThat(attempt.provider()).isEqualTo("SIMULATOR");
+            assertThat(attempt.providerReference()).isNull();
+            assertThat(attempt.status()).isEqualTo("FAILED");
+            assertThat(attempt.errorCode()).isEqualTo("SIMULATED_TIMEOUT");
+            assertThat(attempt.errorMessage()).isEqualTo("Simulated provider timeout");
+            assertThat(attempt.attemptedAt()).isEqualTo(Instant.parse("2026-10-22T11:59:00Z"));
+        });
+        assertThat(attempts.get(1)).satisfies(attempt -> {
+            assertThat(attempt.id()).isEqualTo(RETRY_ID);
+            assertThat(attempt.attemptNumber()).isEqualTo(2);
+            assertThat(attempt.providerReference()).isEqualTo("SIM-2026-000001");
+            assertThat(attempt.status()).isEqualTo("DELIVERED");
+            assertThat(attempt.attemptedAt()).isEqualTo(Instant.parse("2026-10-22T12:00:00Z"));
+        });
+        server.verify();
+    }
+
+    @Test
+    void preservesAnExpertNotFoundProblemOnAttempts() {
+        server.expect(requestTo(ATTEMPTS_URL + "?tenantId=" + TENANT))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withStatus(HttpStatus.NOT_FOUND)
+                        .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                        .body("""
+                                {"type": "https://errors.eia.example/eia-ntf-9001",
+                                 "title": "Resource not found", "status": 404,
+                                 "detail": "Notification '0192f3a4-0000-7000-8000-000000000001' was not found.",
+                                 "code": "EIA-NTF-9001", "category": "NOT_FOUND"}
+                                """));
+
+        assertThatThrownBy(() -> client.findAttempts(TENANT, NOTIFICATION_ID))
+                .isInstanceOfSatisfying(ExpertApiException.class, ex -> {
+                    assertThat(ex.status()).isEqualTo(404);
+                    assertThat(ex.code()).isEqualTo("EIA-NTF-9001");
+                    assertThat(ex.title()).isEqualTo("Resource not found");
+                    assertThat(ex.category()).isEqualTo("NOT_FOUND");
+                    assertThat(ex.retryable()).isFalse();
+                });
+        server.verify();
+    }
+
     private static CreateNotificationCommand command(String sourceType, UUID sourceId, String sourceReference) {
         return new CreateNotificationCommand("NEW_CLAIM_NOTICE", "EMAIL", PARTY_ID,
                 "Claim requires attention", "Claim CLM-2026-000000001 requires attention.",
@@ -228,6 +305,11 @@ class NotificationExpertClientTest {
     }
 
     private static String notificationJson(String sourceType, UUID sourceId, String sourceReference) {
+        return notificationJson(sourceType, sourceId, sourceReference, null, null);
+    }
+
+    private static String notificationJson(String sourceType, UUID sourceId, String sourceReference,
+                                           Instant deliveredAt, String providerReference) {
         return """
                 {
                   "id": "0192f3a4-0000-7000-8000-000000000001",
@@ -243,6 +325,8 @@ class NotificationExpertClientTest {
                   "templateVersion": 1,
                   "scheduledAt": null,
                   "sentAt": null,
+                  "deliveredAt": %s,
+                  "providerReference": %s,
                   "version": 0,
                   "createdAt": "2026-10-19T12:00:00Z",
                   "updatedAt": "2026-10-19T12:00:00Z",
@@ -250,9 +334,45 @@ class NotificationExpertClientTest {
                   "sourceId": %s,
                   "sourceReference": %s
                 }
-                """.formatted(jsonValue(sourceType),
+                """.formatted(
+                jsonValue(deliveredAt == null ? null : deliveredAt.toString()),
+                jsonValue(providerReference),
+                jsonValue(sourceType),
                 jsonValue(sourceId == null ? null : sourceId.toString()),
                 jsonValue(sourceReference));
+    }
+
+    private static String attemptsJson() {
+        return """
+                [
+                  {
+                    "id": "0192f3a4-0000-7000-8000-0000000000a1",
+                    "tenantId": "11111111-1111-7111-8111-111111111111",
+                    "notificationId": "0192f3a4-0000-7000-8000-000000000001",
+                    "attemptNumber": 1,
+                    "channel": "EMAIL",
+                    "provider": "SIMULATOR",
+                    "providerReference": null,
+                    "status": "FAILED",
+                    "errorCode": "SIMULATED_TIMEOUT",
+                    "errorMessage": "Simulated provider timeout",
+                    "attemptedAt": "2026-10-22T11:59:00Z"
+                  },
+                  {
+                    "id": "0192f3a4-0000-7000-8000-0000000000a2",
+                    "tenantId": "11111111-1111-7111-8111-111111111111",
+                    "notificationId": "0192f3a4-0000-7000-8000-000000000001",
+                    "attemptNumber": 2,
+                    "channel": "EMAIL",
+                    "provider": "SIMULATOR",
+                    "providerReference": "SIM-2026-000001",
+                    "status": "DELIVERED",
+                    "errorCode": null,
+                    "errorMessage": null,
+                    "attemptedAt": "2026-10-22T12:00:00Z"
+                  }
+                ]
+                """;
     }
 
     private static String jsonValue(String value) {

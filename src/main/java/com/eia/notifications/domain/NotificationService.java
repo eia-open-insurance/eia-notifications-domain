@@ -74,6 +74,15 @@ public class NotificationService {
         return client.findById(tenantId, id);
     }
 
+    /**
+     * Tenant-scoped delivery history. The expert owns the attempt projection,
+     * its ordering, and the notification/tenant check, so the domain forwards
+     * the read and preserves the expert's 404 for an unknown notification.
+     */
+    public List<NotificationDeliveryAttemptDto> attempts(UUID tenantId, UUID id) {
+        return client.findAttempts(tenantId, id);
+    }
+
     public NotificationDto create(UUID tenantId, CreateNotificationCommand command) {
         NotificationType.from(command.notificationType());
         NotificationChannel.from(command.channel());

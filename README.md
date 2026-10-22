@@ -39,6 +39,11 @@ Owns the business logic for this vertical.
 - Spring Boot 3.4.0, Java 22, port **8100**.
 - Public API under `/api/v1/notifications`; `X-EIA-Tenant` is required on every request.
 - `GET` collection, `GET /{id}`, `POST` create, and `POST /{id}/send`.
+- `GET /{id}/attempts` proxies the tenant-scoped delivery-attempt history from the expert,
+  forwarding the tenant on the query parameter and `X-EIA-Tenant`; an unknown or foreign-tenant
+  notification keeps the expert's `404` problem.
+- `NotificationDto` carries the provider-confirmed delivery evidence `providerReference` and
+  `deliveredAt` alongside `sentAt`.
 - Create accepts an optional flat source link (`sourceType`, `sourceId`, `sourceReference`) and forwards
   it to the expert unchanged. The expert owns the source-linkage rules; its `400` problem is propagated unchanged.
 - `GET` collection accepts an optional `sourceType` + `sourceId` query filter and forwards it to the

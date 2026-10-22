@@ -30,6 +30,7 @@ class NotificationControllerTest {
 
     private static final UUID TENANT = UUID.fromString("11111111-1111-7111-8111-111111111111");
     private static final UUID NOTIFICATION_ID = UUID.fromString("0192f3a4-0000-7000-8000-000000000001");
+    private static final UUID ATTEMPT_ID = UUID.fromString("0192f3a4-0000-7000-8000-0000000000a1");
     private static final UUID PARTY_ID = UUID.fromString("0192f3a4-0000-7000-8000-000000000002");
     private static final UUID SOURCE_ID = UUID.fromString("0192f3a4-0000-7000-8000-000000000003");
 
@@ -294,6 +295,74 @@ class NotificationControllerTest {
     }
 
     @Test
+    void getExposesProviderReferenceAndDeliveredAt() throws Exception {
+        when(service.get(TENANT, NOTIFICATION_ID)).thenReturn(deliveredDto());
+
+        mvc.perform(get("/api/v1/notifications/{id}", NOTIFICATION_ID)
+                        .header("X-EIA-Tenant", TENANT.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.providerReference").value("SIM-2026-000001"))
+                .andExpect(jsonPath("$.deliveredAt").value("2026-10-20T09:31:00Z"));
+    }
+
+    @Test
+    void attemptsReturnProviderAndDeliveryEvidence() throws Exception {
+        when(service.attempts(TENANT, NOTIFICATION_ID)).thenReturn(List.of(attempt()));
+
+        mvc.perform(get("/api/v1/notifications/{id}/attempts", NOTIFICATION_ID)
+                        .header("X-EIA-Tenant", TENANT.toString()))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+                .andExpect(jsonPath("$[0].id").value(ATTEMPT_ID.toString()))
+                .andExpect(jsonPath("$[0].notificationId").value(NOTIFICATION_ID.toString()))
+                .andExpect(jsonPath("$[0].attemptNumber").value(1))
+                .andExpect(jsonPath("$[0].channel").value("EMAIL"))
+                .andExpect(jsonPath("$[0].provider").value("SIMULATOR"))
+                .andExpect(jsonPath("$[0].providerReference").value("SIM-" + NOTIFICATION_ID))
+                .andExpect(jsonPath("$[0].status").value("DELIVERED"))
+                .andExpect(jsonPath("$[0].errorCode").value(nullValue()))
+                .andExpect(jsonPath("$[0].attemptedAt").value("2026-10-22T12:00:00Z"));
+
+        verify(service).attempts(TENANT, NOTIFICATION_ID);
+    }
+
+    @Test
+    void attemptsPreserveExpert404() throws Exception {
+        when(service.attempts(TENANT, NOTIFICATION_ID)).thenThrow(new ExpertApiException(
+                404, "EIA-NTF-9001", "Resource not found",
+                "Notification '" + NOTIFICATION_ID + "' was not found.", "NOT_FOUND", false));
+
+        mvc.perform(get("/api/v1/notifications/{id}/attempts", NOTIFICATION_ID)
+                        .header("X-EIA-Tenant", TENANT.toString()))
+                .andExpect(status().isNotFound())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("EIA-NTF-9001"))
+                .andExpect(jsonPath("$.category").value("NOT_FOUND"))
+                .andExpect(jsonPath("$.retryable").value(false));
+
+        verify(service).attempts(TENANT, NOTIFICATION_ID);
+    }
+
+    @Test
+    void attemptsRequireTheTenantHeader() throws Exception {
+        mvc.perform(get("/api/v1/notifications/{id}/attempts", NOTIFICATION_ID))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("EIA-NTF-9501"));
+
+        verify(service, never()).attempts(any(), any());
+    }
+
+    @Test
+    void attemptsRejectAMalformedNotificationId() throws Exception {
+        mvc.perform(get("/api/v1/notifications/not-a-uuid/attempts")
+                        .header("X-EIA-Tenant", TENANT.toString()))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.code").value("EIA-NTF-9503"));
+    }
+
+    @Test
     void sendRejectsFutureScheduleWithStructured400() throws Exception {
         when(service.send(TENANT, NOTIFICATION_ID)).thenThrow(new ApiException(
                 ErrorCode.SEND_BEFORE_SCHEDULED,
@@ -311,7 +380,7 @@ class NotificationControllerTest {
         return new NotificationDto(NOTIFICATION_ID, TENANT, "NTF-2026-000000001", "NEW_CLAIM_NOTICE",
                 "EMAIL", status, PARTY_ID, "Claim requires attention",
                 "Claim CLM-2026-000000001 requires attention.", templateCode,
-                templateCode == null ? null : 1, null, null, 0, Instant.now(), Instant.now(),
+                templateCode == null ? null : 1, null, null, null, null, 0, Instant.now(), Instant.now(),
                 null, null, null);
     }
 
@@ -319,7 +388,22 @@ class NotificationControllerTest {
         return new NotificationDto(NOTIFICATION_ID, TENANT, "NTF-2026-000000001", "NEW_CLAIM_NOTICE",
                 "EMAIL", "CREATED", PARTY_ID, "Claim requires attention",
                 "Claim CLM-2026-000000001 requires attention.", "CLAIM_NOTICE_STANDARD",
-                1, null, null, 0, Instant.now(), Instant.now(),
+                1, null, null, null, null, 0, Instant.now(), Instant.now(),
                 sourceType, sourceId, sourceReference);
+    }
+
+    private NotificationDto deliveredDto() {
+        return new NotificationDto(NOTIFICATION_ID, TENANT, "NTF-2026-000000001", "NEW_CLAIM_NOTICE",
+                "EMAIL", "DELIVERED", PARTY_ID, "Claim requires attention",
+                "Claim CLM-2026-000000001 requires attention.", "CLAIM_NOTICE_STANDARD",
+                1, null, Instant.parse("2026-10-20T09:30:00Z"), Instant.parse("2026-10-20T09:31:00Z"),
+                "SIM-2026-000001", 1, Instant.parse("2026-10-19T12:00:00Z"),
+                Instant.parse("2026-10-20T09:31:00Z"), null, null, null);
+    }
+
+    private NotificationDeliveryAttemptDto attempt() {
+        return new NotificationDeliveryAttemptDto(ATTEMPT_ID, TENANT, NOTIFICATION_ID, 1, "EMAIL",
+                "SIMULATOR", "SIM-" + NOTIFICATION_ID, "DELIVERED", null, null,
+                Instant.parse("2026-10-22T12:00:00Z"));
     }
 }
