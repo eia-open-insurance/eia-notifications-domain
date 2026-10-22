@@ -22,6 +22,9 @@ import java.util.function.Supplier;
 @Component
 public class NotificationExpertClient {
 
+    private static final String TEMPLATES_PATH = "/api/v1/notifications/templates";
+    private static final String TENANT_HEADER = "X-EIA-Tenant";
+
     private final RestClient client;
     private final ObjectMapper objectMapper;
 
@@ -84,6 +87,74 @@ public class NotificationExpertClient {
         });
     }
 
+    public List<NotificationTemplateDto> findAllTemplates(UUID tenantId, NotificationTemplateStatus status,
+                                                          String code) {
+        return call(() -> {
+            List<NotificationTemplateDto> body = client.get()
+                    .uri(uri -> {
+                        uri.path(TEMPLATES_PATH).queryParam("tenantId", tenantId);
+                        if (status != null) {
+                            uri.queryParam("status", status.name());
+                        }
+                        if (code != null && !code.isBlank()) {
+                            uri.queryParam("code", code.trim());
+                        }
+                        return uri.build();
+                    })
+                    .header(TENANT_HEADER, tenantId.toString())
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<List<NotificationTemplateDto>>() {
+                    });
+            return body == null ? List.of() : body;
+        });
+    }
+
+    public NotificationTemplateDto createTemplate(UUID tenantId, CreateNotificationTemplateCommand command) {
+        ExpertCreateTemplateRequest request = new ExpertCreateTemplateRequest(
+                tenantId,
+                command.templateCode() == null ? null : command.templateCode().trim(),
+                command.templateVersion(),
+                trimToNull(command.channel()),
+                command.locale() == null ? null : command.locale().trim(),
+                command.bodyTemplate());
+        return call(() -> {
+            NotificationTemplateDto body = client.post()
+                    .uri(TEMPLATES_PATH)
+                    .header(TENANT_HEADER, tenantId.toString())
+                    .body(request)
+                    .retrieve()
+                    .body(NotificationTemplateDto.class);
+            return requireBody(body);
+        });
+    }
+
+    public NotificationTemplateDto approveTemplate(UUID tenantId, UUID id, UUID approvedBy) {
+        return call(() -> {
+            NotificationTemplateDto body = client.post()
+                    .uri(uri -> uri.path(TEMPLATES_PATH + "/{id}/approve")
+                            .queryParam("tenantId", tenantId)
+                            .build(id))
+                    .header(TENANT_HEADER, tenantId.toString())
+                    .body(new ApproveTemplateRequest(tenantId, approvedBy))
+                    .retrieve()
+                    .body(NotificationTemplateDto.class);
+            return requireBody(body);
+        });
+    }
+
+    public NotificationTemplateDto retireTemplate(UUID tenantId, UUID id) {
+        return call(() -> {
+            NotificationTemplateDto body = client.post()
+                    .uri(uri -> uri.path(TEMPLATES_PATH + "/{id}/retire")
+                            .queryParam("tenantId", tenantId)
+                            .build(id))
+                    .header(TENANT_HEADER, tenantId.toString())
+                    .retrieve()
+                    .body(NotificationTemplateDto.class);
+            return requireBody(body);
+        });
+    }
+
     private <T> T call(Supplier<T> supplier) {
         try {
             return supplier.get();
@@ -94,7 +165,7 @@ public class NotificationExpertClient {
         }
     }
 
-    private NotificationDto requireBody(NotificationDto body) {
+    private <T> T requireBody(T body) {
         if (body == null) {
             throw unavailable("the expert returned an empty response");
         }
@@ -127,6 +198,14 @@ public class NotificationExpertClient {
                 "The Notifications expert service could not be reached: " + reason, "DEPENDENCY", true);
     }
 
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     private record ExpertCreateRequest(
             UUID tenantId,
             String notificationType,
@@ -138,5 +217,18 @@ public class NotificationExpertClient {
             Integer templateVersion,
             Instant scheduledAt
     ) {
+    }
+
+    private record ExpertCreateTemplateRequest(
+            UUID tenantId,
+            String templateCode,
+            Integer templateVersion,
+            String channel,
+            String locale,
+            String bodyTemplate
+    ) {
+    }
+
+    private record ApproveTemplateRequest(UUID tenantId, UUID approvedBy) {
     }
 }

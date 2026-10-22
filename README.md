@@ -39,6 +39,10 @@ Owns the business logic for this vertical.
 - Spring Boot 3.4.0, Java 22, port **8100**.
 - Public API under `/api/v1/notifications`; `X-EIA-Tenant` is required on every request.
 - `GET` collection, `GET /{id}`, `POST` create, and `POST /{id}/send`.
+- Template administration: `GET /templates` (optional `status` and `code` filters), `POST /templates`,
+  `POST /templates/{id}/approve` with `{approvedBy}`, and `POST /templates/{id}/retire`.
+  Templates are created as `DRAFT`, become `ACTIVE` only through approval (NTF-14), and may be retired.
+  Expert `400`/`404`/`409` problems are propagated unchanged.
 - Owns request validation, SPEC 11.8.5 channel/type checks, send-state checks, and `sent_at >= scheduled_at`; calls the expert through a `RestClient`.
 - Expert failures are propagated as RFC 9457 `application/problem+json` with the expert's status and `EIA-NTF-*` code.
 

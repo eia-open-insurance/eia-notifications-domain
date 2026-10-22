@@ -17,6 +17,7 @@ public enum ErrorCode {
     VALIDATION_FAILED("EIA-NTF-9404", HttpStatus.BAD_REQUEST, "Request validation failed", "VALIDATION", false),
     INVALID_TEMPLATE_VERSION("EIA-NTF-9405", HttpStatus.BAD_REQUEST, "Invalid template version", "VALIDATION", false),
     MALFORMED_REQUEST("EIA-NTF-9406", HttpStatus.BAD_REQUEST, "Malformed request", "VALIDATION", false),
+    INVALID_TEMPLATE_STATUS("EIA-NTF-9408", HttpStatus.BAD_REQUEST, "Invalid template status", "VALIDATION", false),
     TENANT_HEADER_REQUIRED("EIA-NTF-9501", HttpStatus.BAD_REQUEST, "Tenant header required", "VALIDATION", false),
     INVALID_TENANT("EIA-NTF-9502", HttpStatus.BAD_REQUEST, "Invalid tenant header", "VALIDATION", false),
     INVALID_ARGUMENT("EIA-NTF-9503", HttpStatus.BAD_REQUEST, "Invalid argument", "VALIDATION", false),
